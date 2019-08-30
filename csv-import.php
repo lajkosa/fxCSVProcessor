@@ -77,6 +77,14 @@ class CsvImport {
 				break;
 
 			case static::$arguments[self::IMPORT]:
+
+				if (empty($argv[2])) {
+					echo "Filename must be given!\n\n";
+					return;
+				}
+
+				$interval = $argv[3] ?? 'year';
+				static::$instance->import($argv[2], $interval);
 				break;
 		}
 	}
@@ -87,11 +95,11 @@ class CsvImport {
 				`id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
 				`interval` VARCHAR(255),
 				`currency` VARCHAR(8),
-				`capital` FLOAT(6,2),
-				`equity` FLOAT(6,2),
-				`profit` FLOAT(5,2),
+				`capital` FLOAT(9,2),
+				`equity` FLOAT(9,2),
+				`profit` FLOAT(6,2),
 				`trades` INT,
-				`profit_factor` FLOAT(2,2),
+				`profit_factor` FLOAT(4,2),
 				`params` TEXT
 			)
 		');
@@ -105,9 +113,9 @@ class CsvImport {
 			return;
 		}
 
-		$interval = $interval ?: 'year';
-
 		$fh = fopen($filename, 'r');
+
+		$insertCollection = [];
 
 		while (!feof($fh)) {
 			$line = fgets($fh);
@@ -118,11 +126,62 @@ class CsvImport {
 				continue;
 			}
 
-			$currency = $this->stripCurrency($columns[self::COLUMN_PARAMETERS]);
-
+			$this->addToCollection($insertCollection, $columns, $interval);
 		}
 
 		fclose($fh);
+
+		if (count($insertCollection) > 0) {
+
+			// insert into table
+			$sql = '
+			INSERT INTO ' . self::TABLE_NAME . ' (
+				`interval`,
+				`currency`,
+				`capital`,
+				`equity`,
+				`profit`,
+				`trades`,
+				`profit_factor`,
+				`params`
+			) VALUES 
+		';
+
+			$this->PDO->query($sql . implode(',', $insertCollection));
+		}
+
+		echo count($insertCollection) . " row has been inserted!\n\n";
+	}
+
+	private function addToCollection(array &$collection, array $columns, $interval) {
+
+		$currency     = $this->stripCurrency($columns[self::COLUMN_PARAMETERS]);
+		$capital      = $this->toFloat($columns[self::COLUMN_CAPITAL]);
+		$equity       = $this->toFloat($columns[self::COLUMN_EQUITY]);
+		$profit       = $this->toFloat($columns[self::COLUMN_PROFIT]);
+		$profitFactor = $this->toFloat($columns[self::COLUMN_PROFIT_FACTOR]);
+		$trades       = (int) $columns[self::COLUMN_TRADES];
+		$parameters   = $columns[self::COLUMN_PARAMETERS];
+
+		$collection[] = '
+		(
+			"' . $interval . '",
+			"' . $currency . '",
+			' . $capital . ',
+			' . $equity . ',
+			' . $profit . ',
+			' . $trades . ',
+			' . $profitFactor . ',
+			"' . $parameters . '"
+		)';
+	}
+
+	/**
+	 * @param $number
+	 * @return float
+	 */
+	private function toFloat($number) {
+		return (float) str_replace(',', '.', $number);
 	}
 
 	private function isCSVHeader(array $columns) {
@@ -153,10 +212,11 @@ class CsvImport {
 		$query = $this->PDO->prepare('
 			SELECT COUNT(*) AS num
 				FROM ' . self::TABLE_NAME . '
-				WHERE `parameters` = :parameters
+				WHERE `params` = :parameters
 		');
 
 		$query->bindParam(':parameters', $columns[self::COLUMN_PARAMETERS], PDO::PARAM_STR);
+		$query->execute();
 
 		$num = $query->fetchColumn();
 
@@ -170,7 +230,7 @@ csv-import usage
 ================
 
 ARGUMENTS:
- - {$arguments[0]}		
+ - {$arguments[0]}
  - {$arguments[1]} [name_of_csv_file]
 
 
