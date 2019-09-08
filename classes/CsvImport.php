@@ -109,7 +109,7 @@ class CsvImport {
 			$columns = explode(';', $line);
 
 			// skip the header and skip if it is already in table
-			if ($this->isCSVHeader($columns) || $this->isInTable($columns)) {
+			if ($this->isCSVHeader($columns) || $this->isInTable($columns, $interval)) {
 				continue;
 			}
 
@@ -191,18 +191,21 @@ class CsvImport {
 	 * Check if current columns already in table.
 	 *
 	 * @param array $columns
+	 * @param string $interval
 	 *
 	 * @return bool
 	 */
-	private function isInTable(array $columns) {
+	private function isInTable(array $columns, $interval) {
 
 		$query = $this->PDO->prepare('
 			SELECT COUNT(*) AS num
 				FROM ' . self::TABLE_NAME . '
 				WHERE `params` = :parameters
+				  AND `interval` = :interval
 		');
 
 		$query->bindParam(':parameters', $columns[self::COLUMN_PARAMETERS], PDO::PARAM_STR);
+		$query->bindParam(':interval', $interval, PDO::PARAM_STR);
 		$query->execute();
 
 		$num = $query->fetchColumn();
