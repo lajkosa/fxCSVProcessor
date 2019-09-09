@@ -86,7 +86,7 @@ class CsvImport {
 				`equity` FLOAT(9,2),
 				`profit` FLOAT(8,2),
 				`trades` INT,
-				`profit_factor` FLOAT(4,2),
+				`profit_factor` FLOAT(5,2),
 				`params` TEXT
 			)
 		');
